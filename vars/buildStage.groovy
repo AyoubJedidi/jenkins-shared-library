@@ -2,7 +2,7 @@ def call(Map config) {
     def projectType = config.projectType
 
     // Ensure the actual project repo is checked out
-    checkout scm
+git branch: 'main', url: 'https://github.com/AyoubJedidi/jenkins-shared-library'
 
     echo "🔨 Building ${projectType} project..."
 
