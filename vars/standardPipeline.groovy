@@ -3,11 +3,35 @@ def call(Map config) {
         agent any
         
         stages {
+            stage('Checkout') {
+                when {
+                    expression { config.gitUrl != null }
+                }
+                steps {
+                    script {
+                        def branch = config.gitBranch ?: 'main'
+                        git branch: branch, url: config.gitUrl
+                        
+                        // If project is in subdirectory
+                        if (config.projectDir) {
+                            dir(config.projectDir) {
+                                echo "Working in directory: ${config.projectDir}"
+                            }
+                        }
+                    }
+                }
+            }
+            
             stage('Build') {
                 steps {
                     script {
-                        echo "🚀 Starting standardPipeline for ${config.projectType}"
-                        buildStage(config)
+                        if (config.projectDir) {
+                            dir(config.projectDir) {
+                                buildStage(config)
+                            }
+                        } else {
+                            buildStage(config)
+                        }
                     }
                 }
             }
@@ -18,7 +42,13 @@ def call(Map config) {
                 }
                 steps {
                     script {
-                        testStage(config)
+                        if (config.projectDir) {
+                            dir(config.projectDir) {
+                                testStage(config)
+                            }
+                        } else {
+                            testStage(config)
+                        }
                     }
                 }
             }
@@ -29,7 +59,13 @@ def call(Map config) {
                 }
                 steps {
                     script {
-                        dockerStage(config)
+                        if (config.projectDir) {
+                            dir(config.projectDir) {
+                                dockerStage(config)
+                            }
+                        } else {
+                            dockerStage(config)
+                        }
                     }
                 }
             }
