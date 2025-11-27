@@ -1,4 +1,9 @@
 def call(Map config) {
+    // Validate required config
+    if (!config.projectType) {
+        error "❌ projectType is required! (maven, gradle, npm, python, dotnet)"
+    }
+    
     pipeline {
         agent any
         
@@ -10,6 +15,7 @@ def call(Map config) {
                 steps {
                     script {
                         def branch = config.gitBranch ?: 'main'
+                        echo "📥 Checking out ${config.gitUrl} (${branch})"
                         git branch: branch, url: config.gitUrl
                     }
                 }
@@ -83,10 +89,25 @@ def call(Map config) {
         
         post {
             success {
-                echo "✅ Pipeline completed successfully!"
+                script {
+                    echo "✅ Pipeline completed successfully!"
+                    if (config.slackChannel) {
+                        notifySlack.buildSuccess(config)
+                    }
+                }
             }
             failure {
-                echo "❌ Pipeline failed!"
+                script {
+                    echo "❌ Pipeline failed!"
+                    if (config.slackChannel) {
+                        notifySlack.buildFailure(config)
+                    }
+                }
+            }
+            always {
+                script {
+                    echo "🏁 Pipeline finished"
+                }
             }
         }
     }

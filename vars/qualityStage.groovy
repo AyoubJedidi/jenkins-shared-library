@@ -5,26 +5,36 @@ def call(Map config) {
     
     switch(projectType) {
         case 'maven':
-            // Maven: Checkstyle, SpotBugs, PMD
             sh 'mvn checkstyle:check || true'
             sh 'mvn pmd:check || true'
             echo "✓ Maven quality checks completed"
             break
             
         case 'gradle':
-            // Gradle: Checkstyle, SpotBugs
             sh './gradlew check || true'
             echo "✓ Gradle quality checks completed"
             break
             
         case 'npm':
-            // npm: ESLint, Prettier
-            sh 'npm run lint || true'
+            def hasLintScript = sh(
+                script: 'npm run | grep -q "\\slint"',
+                returnStatus: true
+            ) == 0
+            if (hasLintScript) {
+                sh 'npm run lint || true'
+            } else {
+                echo "No lint script found, skipping"
+            }
             echo "✓ npm quality checks completed"
             break
             
+        case 'python':
+            sh 'pip install flake8 || true'
+            sh 'flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true'
+            echo "✓ Python quality checks completed"
+            break
+            
         case 'dotnet':
-            // .NET: Built-in analyzers run during build
             echo "✓ .NET quality checks included in build"
             break
             

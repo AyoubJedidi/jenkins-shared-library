@@ -14,20 +14,23 @@ def call(Map config) {
             
         case 'npm':
             sh 'npm install'
-            // Only run build if script exists
+            // Build is optional for npm
             def hasBuildScript = sh(
-                script: 'npm run | grep -q "build"',
+                script: 'npm run | grep -q "\\sbuild"',
                 returnStatus: true
             ) == 0
             if (hasBuildScript) {
                 sh 'npm run build'
-            } else {
-                echo "No build script found, skipping npm run build"
             }
             break
             
+        case 'python':
+            sh 'pip install -r requirements.txt'
+            break
+            
         case 'dotnet':
-            sh 'dotnet build --configuration Release'
+            sh 'dotnet restore'
+            sh 'dotnet build --configuration Release --no-restore'
             break
             
         default:
