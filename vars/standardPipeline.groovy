@@ -11,13 +11,6 @@ def call(Map config) {
                     script {
                         def branch = config.gitBranch ?: 'main'
                         git branch: branch, url: config.gitUrl
-                        
-                        // If project is in subdirectory
-                        if (config.projectDir) {
-                            dir(config.projectDir) {
-                                echo "Working in directory: ${config.projectDir}"
-                            }
-                        }
                     }
                 }
             }
@@ -48,6 +41,23 @@ def call(Map config) {
                             }
                         } else {
                             testStage(config)
+                        }
+                    }
+                }
+            }
+            
+            stage('Quality') {
+                when {
+                    expression { config.runQuality == true }
+                }
+                steps {
+                    script {
+                        if (config.projectDir) {
+                            dir(config.projectDir) {
+                                qualityStage(config)
+                            }
+                        } else {
+                            qualityStage(config)
                         }
                     }
                 }
