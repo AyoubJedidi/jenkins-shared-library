@@ -10,6 +10,24 @@ def call(Map config) {
             break
             
         case 'gradle':
+
+            // --- FIX: auto-detect gradlew if not in current directory ---
+            sh '''
+                if [ ! -f "./gradlew" ]; then
+                    echo "⚠ gradlew not found in current directory, searching..."
+                    GRADLEW_PATH=$(find . -maxdepth 3 -name "gradlew" | head -n 1)
+
+                    if [ -z "$GRADLEW_PATH" ]; then
+                        echo "❌ gradlew not found anywhere in the workspace"
+                        exit 1
+                    fi
+
+                    echo "✓ gradlew found at: $GRADLEW_PATH"
+                    cd "$(dirname "$GRADLEW_PATH")"
+                fi
+            '''
+            // -------------------------------------------------------------
+
             sh './gradlew test --no-daemon'
             junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
             break
