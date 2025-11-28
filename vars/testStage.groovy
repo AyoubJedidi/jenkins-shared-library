@@ -29,13 +29,20 @@ def call(Map config) {
         case 'python':
             sh '''
                 # Activate venv if it exists
-                if [ -d "venv" ]; then
+                if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
                     . venv/bin/activate
                 fi
                 
-                # Check if pytest is needed
-                if [ -d "tests" ] || [ -d "test" ]; then
-                    pip install pytest --break-system-packages 2>/dev/null || pip install pytest
+                # Check if pytest or tests exist
+                if [ -d "tests" ] || [ -d "test" ] || ls test_*.py 2>/dev/null | grep -q .; then
+                    # Install pytest if not in venv
+                    if [ -d "venv" ]; then
+                        pip install pytest 2>/dev/null || true
+                    else
+                        pip3 install pytest --break-system-packages 2>/dev/null || true
+                    fi
+                    
+                    # Run tests
                     pytest || true
                 else
                     echo "No tests directory found, skipping tests"
