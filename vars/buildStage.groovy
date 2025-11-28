@@ -14,7 +14,6 @@ def call(Map config) {
             
         case 'npm':
             sh 'npm install'
-            // Build is optional for npm
             def hasBuildScript = sh(
                 script: 'npm run | grep -q "\\sbuild"',
                 returnStatus: true
@@ -25,20 +24,17 @@ def call(Map config) {
             break
             
         case 'python':
-            // Use virtual environment or --break-system-packages
             sh '''
                 if [ -f "requirements.txt" ]; then
-                    # Try virtual environment first
-                    if command -v python3 &> /dev/null; then
-                        python3 -m venv venv || true
-                        if [ -d "venv" ]; then
-                            . venv/bin/activate
-                            pip install -r requirements.txt
-                        else
-                            # Fallback to --break-system-packages
-                            pip install -r requirements.txt --break-system-packages
-                        fi
+                    # Try venv first
+                    if python3 -m venv venv 2>/dev/null; then
+                        echo "✓ Using virtual environment"
+                        . venv/bin/activate
+                        pip install -r requirements.txt
                     else
+                        # Fallback to --break-system-packages
+                        echo "⚠ venv not available, using --break-system-packages"
+                        pip3 install -r requirements.txt --break-system-packages || \
                         pip install -r requirements.txt --break-system-packages
                     fi
                 fi
