@@ -9,9 +9,27 @@ def call(Map config) {
             break
             
         case 'gradle':
+
+            // --- FIX: auto-detect gradlew like in TestStage ---
+            sh '''
+                if [ ! -f "./gradlew" ]; then
+                    echo "⚠ gradlew not found in current directory, searching..."
+                    GRADLEW_PATH=$(find . -maxdepth 3 -name "gradlew" | head -n 1)
+
+                    if [ -z "$GRADLEW_PATH" ]; then
+                        echo "❌ gradlew not found anywhere in workspace"
+                        exit 1
+                    fi
+
+                    echo "✓ gradlew found at: $GRADLEW_PATH"
+                    cd "$(dirname "$GRADLEW_PATH")"
+                fi
+            '''
+            // ---------------------------------------------------
+
             sh './gradlew build -x test --no-daemon'
             break
-            
+
         case 'npm':
             sh 'npm install'
             def hasBuildScript = sh(
@@ -22,7 +40,7 @@ def call(Map config) {
                 sh 'npm run build'
             }
             break
-            
+
         case 'python':
             sh '''
                 if [ -f "requirements.txt" ]; then
@@ -32,7 +50,6 @@ def call(Map config) {
                         . venv/bin/activate
                         pip install -r requirements.txt
                     else
-                        # Fallback to --break-system-packages
                         echo "⚠ venv not available, using --break-system-packages"
                         pip3 install -r requirements.txt --break-system-packages || \
                         pip install -r requirements.txt --break-system-packages
