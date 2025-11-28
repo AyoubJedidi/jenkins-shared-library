@@ -15,26 +15,32 @@ def call(Map config) {
             break
             
         case 'npm':
-            // Check if test script exists
             def hasTestScript = sh(
                 script: 'npm run | grep -q "\\stest"',
                 returnStatus: true
             ) == 0
             if (hasTestScript) {
-                sh 'npm test || true'  // Don't fail if no tests
+                sh 'npm test || true'
             } else {
                 echo "No test script found, skipping tests"
             }
             break
             
         case 'python':
-            def hasPytest = fileExists('tests') || fileExists('test')
-            if (hasPytest) {
-                sh 'pip install pytest || true'
-                sh 'pytest || true'  // Don't fail if no tests
-            } else {
-                echo "No tests directory found, skipping tests"
-            }
+            sh '''
+                # Activate venv if it exists
+                if [ -d "venv" ]; then
+                    . venv/bin/activate
+                fi
+                
+                # Check if pytest is needed
+                if [ -d "tests" ] || [ -d "test" ]; then
+                    pip install pytest --break-system-packages 2>/dev/null || pip install pytest
+                    pytest || true
+                else
+                    echo "No tests directory found, skipping tests"
+                fi
+            '''
             break
             
         case 'dotnet':

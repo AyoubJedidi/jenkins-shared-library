@@ -29,8 +29,16 @@ def call(Map config) {
             break
             
         case 'python':
-            sh 'pip install flake8 || true'
-            sh 'flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true'
+            sh '''
+                # Activate venv if exists
+                if [ -d "venv" ]; then
+                    . venv/bin/activate
+                fi
+                
+                # Install and run flake8
+                pip install flake8 --break-system-packages 2>/dev/null || pip install flake8 || true
+                flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+            '''
             echo "✓ Python quality checks completed"
             break
             

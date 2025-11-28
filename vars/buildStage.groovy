@@ -25,7 +25,24 @@ def call(Map config) {
             break
             
         case 'python':
-            sh 'pip install -r requirements.txt'
+            // Use virtual environment or --break-system-packages
+            sh '''
+                if [ -f "requirements.txt" ]; then
+                    # Try virtual environment first
+                    if command -v python3 &> /dev/null; then
+                        python3 -m venv venv || true
+                        if [ -d "venv" ]; then
+                            . venv/bin/activate
+                            pip install -r requirements.txt
+                        else
+                            # Fallback to --break-system-packages
+                            pip install -r requirements.txt --break-system-packages
+                        fi
+                    else
+                        pip install -r requirements.txt --break-system-packages
+                    fi
+                fi
+            '''
             break
             
         case 'dotnet':
