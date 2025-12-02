@@ -15,10 +15,10 @@ def send(String providerName, String status, Map config) {
     def provider = NotificationProviders.get(providerName)
     
     if (provider) {
-        echo "📢 Sending ${status} notification via ${providerName}"
+        echo "Sending ${status} notification via ${providerName}"
         provider(status, config)
     } else {
-        echo "⚠️  Notification provider '${providerName}' not registered"
+        echo " Notification provider '${providerName}' not registered"
     }
 }
 
@@ -28,7 +28,7 @@ def registerSlack() {
         def color = status == 'success' ? 'good' : 'danger'
         def emoji = status == 'success' ? '✅' : '❌'
         
-        echo "📢 Slack: ${emoji} Build ${status}"
+        echo " Slack: ${emoji} Build ${status}"
         
         // Uncomment when Slack plugin configured:
         /*
@@ -46,7 +46,7 @@ def registerTeams() {
     NotificationProviders.register('teams') { status, config ->
         def emoji = status == 'success' ? '✅' : '❌'
         
-        echo "📢 Teams: ${emoji} Build ${status}"
+        echo " Teams: ${emoji} Build ${status}"
         
         // Uncomment when httpRequest plugin available:
         /*
@@ -68,9 +68,9 @@ def registerTeams() {
 // Built-in Email provider
 def registerEmail() {
     NotificationProviders.register('email') { status, config ->
-        def subject = status == 'success' ? '✅ Build Success' : '❌ Build Failed'
+        def subject = status == 'success' ? ' Build Success' : ' Build Failed'
         
-        echo "📢 Email: ${subject}"
+        echo " Email: ${subject}"
         
         // Uncomment when email configured:
         /*
