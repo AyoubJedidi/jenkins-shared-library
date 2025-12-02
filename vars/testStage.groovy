@@ -16,7 +16,7 @@ def call(Map config) {
         // Default test commands
         switch(projectType) {
             case 'maven':
-                sh 'mvn test'
+              sh 'mvn test -Dspring.docker.compose.skip-in-tests=true'
                 junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                 break
                 
