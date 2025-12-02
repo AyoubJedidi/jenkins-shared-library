@@ -15,14 +15,10 @@ def call(Map config) {
                 steps {
                     script {
                         def branch = config.gitBranch ?: 'main'
-                        echo " Checking out ${config.gitUrl} (${branch})"
+                        echo "Checking out ${config.gitUrl} (${branch})"
                         
-                        // Before checkout hook
                         config.beforeCheckout?.call()
-                        
                         git branch: branch, url: config.gitUrl
-                        
-                        // After checkout hook
                         config.afterCheckout?.call()
                     }
                 }
@@ -31,7 +27,6 @@ def call(Map config) {
             stage('Build') {
                 steps {
                     script {
-                        // Before build hook
                         config.beforeBuild?.call()
                         
                         if (config.projectDir) {
@@ -42,7 +37,6 @@ def call(Map config) {
                             buildStage(config)
                         }
                         
-                        // After build hook
                         config.afterBuild?.call()
                     }
                 }
@@ -54,7 +48,6 @@ def call(Map config) {
                 }
                 steps {
                     script {
-                        // Before test hook
                         config.beforeTest?.call()
                         
                         if (config.projectDir) {
@@ -65,7 +58,6 @@ def call(Map config) {
                             testStage(config)
                         }
                         
-                        // After test hook
                         config.afterTest?.call()
                     }
                 }
@@ -77,7 +69,6 @@ def call(Map config) {
                 }
                 steps {
                     script {
-                        // Before quality hook
                         config.beforeQuality?.call()
                         
                         if (config.projectDir) {
@@ -88,7 +79,6 @@ def call(Map config) {
                             qualityStage(config)
                         }
                         
-                        // After quality hook
                         config.afterQuality?.call()
                     }
                 }
@@ -100,7 +90,6 @@ def call(Map config) {
                 }
                 steps {
                     script {
-                        // Before docker hook
                         config.beforeDocker?.call()
                         
                         if (config.projectDir) {
@@ -111,27 +100,27 @@ def call(Map config) {
                             dockerStage(config)
                         }
                         
-                        // After docker hook
                         config.afterDocker?.call()
                     }
                 }
             }
             
-            // User-defined custom stages
-            script {
-                if (config.customStages) {
-                    config.customStages.each { stageName, stageClosure ->
-                        stage(stageName) {
-                            steps {
-                                script {
-                                    if (config.projectDir) {
-                                        dir(config.projectDir) {
-                                            stageClosure()
-                                        }
-                                    } else {
-                                        stageClosure()
-                                    }
+            // Custom stages wrapped in a stage block
+            stage('Custom Stages') {
+                when {
+                    expression { config.customStages != null && config.customStages.size() > 0 }
+                }
+                steps {
+                    script {
+                        config.customStages.each { stageName, stageClosure ->
+                            echo "Running custom stage: ${stageName}"
+                            
+                            if (config.projectDir) {
+                                dir(config.projectDir) {
+                                    stageClosure()
                                 }
+                            } else {
+                                stageClosure()
                             }
                         }
                     }
@@ -142,9 +131,8 @@ def call(Map config) {
         post {
             success {
                 script {
-                    echo "Pipeline completed successfully!"
+                    echo " Pipeline completed successfully!"
                     
-                    // Custom notification provider
                     if (config.notificationProvider && config.notificationConfig) {
                         notificationDispatcher.send(
                             config.notificationProvider,
@@ -153,12 +141,10 @@ def call(Map config) {
                         )
                     }
                     
-                    // Legacy Slack support
                     if (config.slackChannel) {
                         notifySlack.buildSuccess(config)
                     }
                     
-                    // Success hook
                     config.onSuccess?.call()
                 }
             }
@@ -166,7 +152,6 @@ def call(Map config) {
                 script {
                     echo " Pipeline failed!"
                     
-                    // Custom notification provider
                     if (config.notificationProvider && config.notificationConfig) {
                         notificationDispatcher.send(
                             config.notificationProvider,
@@ -175,20 +160,16 @@ def call(Map config) {
                         )
                     }
                     
-                    // Legacy Slack support
                     if (config.slackChannel) {
                         notifySlack.buildFailure(config)
                     }
                     
-                    // Failure hook
                     config.onFailure?.call()
                 }
             }
             always {
                 script {
                     echo " Pipeline finished"
-                    
-                    // Always hook
                     config.onAlways?.call()
                 }
             }
