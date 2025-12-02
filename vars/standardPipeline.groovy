@@ -1,7 +1,7 @@
 def call(Map config) {
     // Validate required config
     if (!config.projectType) {
-        error "❌ projectType is required! (maven, gradle, npm, python, dotnet)"
+        error " projectType is required! (maven, gradle, npm, python, dotnet)"
     }
     
     pipeline {
@@ -15,8 +15,15 @@ def call(Map config) {
                 steps {
                     script {
                         def branch = config.gitBranch ?: 'main'
-                        echo "📥 Checking out ${config.gitUrl} (${branch})"
+                        echo " Checking out ${config.gitUrl} (${branch})"
+                        
+                        // Before checkout hook
+                        config.beforeCheckout?.call()
+                        
                         git branch: branch, url: config.gitUrl
+                        
+                        // After checkout hook
+                        config.afterCheckout?.call()
                     }
                 }
             }
@@ -24,6 +31,9 @@ def call(Map config) {
             stage('Build') {
                 steps {
                     script {
+                        // Before build hook
+                        config.beforeBuild?.call()
+                        
                         if (config.projectDir) {
                             dir(config.projectDir) {
                                 buildStage(config)
@@ -31,6 +41,9 @@ def call(Map config) {
                         } else {
                             buildStage(config)
                         }
+                        
+                        // After build hook
+                        config.afterBuild?.call()
                     }
                 }
             }
@@ -41,6 +54,9 @@ def call(Map config) {
                 }
                 steps {
                     script {
+                        // Before test hook
+                        config.beforeTest?.call()
+                        
                         if (config.projectDir) {
                             dir(config.projectDir) {
                                 testStage(config)
@@ -48,6 +64,9 @@ def call(Map config) {
                         } else {
                             testStage(config)
                         }
+                        
+                        // After test hook
+                        config.afterTest?.call()
                     }
                 }
             }
@@ -58,6 +77,9 @@ def call(Map config) {
                 }
                 steps {
                     script {
+                        // Before quality hook
+                        config.beforeQuality?.call()
+                        
                         if (config.projectDir) {
                             dir(config.projectDir) {
                                 qualityStage(config)
@@ -65,6 +87,9 @@ def call(Map config) {
                         } else {
                             qualityStage(config)
                         }
+                        
+                        // After quality hook
+                        config.afterQuality?.call()
                     }
                 }
             }
@@ -75,12 +100,39 @@ def call(Map config) {
                 }
                 steps {
                     script {
+                        // Before docker hook
+                        config.beforeDocker?.call()
+                        
                         if (config.projectDir) {
                             dir(config.projectDir) {
                                 dockerStage(config)
                             }
                         } else {
                             dockerStage(config)
+                        }
+                        
+                        // After docker hook
+                        config.afterDocker?.call()
+                    }
+                }
+            }
+            
+            // User-defined custom stages
+            script {
+                if (config.customStages) {
+                    config.customStages.each { stageName, stageClosure ->
+                        stage(stageName) {
+                            steps {
+                                script {
+                                    if (config.projectDir) {
+                                        dir(config.projectDir) {
+                                            stageClosure()
+                                        }
+                                    } else {
+                                        stageClosure()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -90,23 +142,54 @@ def call(Map config) {
         post {
             success {
                 script {
-                    echo "✅ Pipeline completed successfully!"
+                    echo "Pipeline completed successfully!"
+                    
+                    // Custom notification provider
+                    if (config.notificationProvider && config.notificationConfig) {
+                        notificationDispatcher.send(
+                            config.notificationProvider,
+                            'success',
+                            config.notificationConfig
+                        )
+                    }
+                    
+                    // Legacy Slack support
                     if (config.slackChannel) {
                         notifySlack.buildSuccess(config)
                     }
+                    
+                    // Success hook
+                    config.onSuccess?.call()
                 }
             }
             failure {
                 script {
-                    echo "❌ Pipeline failed!"
+                    echo " Pipeline failed!"
+                    
+                    // Custom notification provider
+                    if (config.notificationProvider && config.notificationConfig) {
+                        notificationDispatcher.send(
+                            config.notificationProvider,
+                            'failure',
+                            config.notificationConfig
+                        )
+                    }
+                    
+                    // Legacy Slack support
                     if (config.slackChannel) {
                         notifySlack.buildFailure(config)
                     }
+                    
+                    // Failure hook
+                    config.onFailure?.call()
                 }
             }
             always {
                 script {
-                    echo "🏁 Pipeline finished"
+                    echo " Pipeline finished"
+                    
+                    // Always hook
+                    config.onAlways?.call()
                 }
             }
         }
