@@ -51,8 +51,80 @@ def call(Map config) {
                 break
                 
             case 'dotnet':
-                sh 'dotnet restore'
-                sh 'dotnet build --configuration Release --no-restore'
+                // Handle global.json SDK version mismatch
+                if (fileExists('global.json')) {
+                    echo "⚠️ Found global.json - checking SDK compatibility..."
+                    
+                    def sdkCompatible = sh(
+                        script: '''
+                            # Extract required SDK version from global.json
+                            REQUIRED=$(cat global.json | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1)
+                            
+                            if [ -z "$REQUIRED" ]; then
+                                # No version specified, compatible
+                                echo "compatible"
+                                exit 0
+                            fi
+                            
+                            # Check if required SDK is installed
+                            if dotnet --list-sdks | grep -q "^${REQUIRED}"; then
+                                echo "compatible"
+                            else
+                                echo "incompatible"
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (sdkCompatible == 'incompatible') {
+                        echo "⚠️ Required SDK not installed - removing global.json to use latest SDK"
+                        sh 'mv global.json global.json.bak'
+                        echo "✓ Backed up global.json to global.json.bak"
+                    } else {
+                        echo "✓ SDK version compatible"
+                    }
+                }
+                
+                // Find and build solution or project
+                def slnFiles = sh(
+                    script: 'ls *.sln 2>/dev/null || echo ""',
+                    returnStdout: true
+                ).trim()
+                
+                def csprojFiles = sh(
+                    script: 'ls *.csproj 2>/dev/null || echo ""',
+                    returnStdout: true
+                ).trim()
+                
+                if (slnFiles) {
+                    // Multiple solutions - use first one or let restore/build auto-detect
+                    def slnCount = slnFiles.split('\n').size()
+                    if (slnCount == 1) {
+                        echo "Found solution file: ${slnFiles}"
+                        sh "dotnet restore '${slnFiles}'"
+                        sh "dotnet build '${slnFiles}' --configuration Release --no-restore"
+                    } else {
+                        echo "⚠️ Found ${slnCount} solution files - using first one: ${slnFiles.split('\n')[0]}"
+                        def firstSln = slnFiles.split('\n')[0]
+                        sh "dotnet restore '${firstSln}'"
+                        sh "dotnet build '${firstSln}' --configuration Release --no-restore"
+                    }
+                } else if (csprojFiles) {
+                    def csprojCount = csprojFiles.split('\n').size()
+                    if (csprojCount == 1) {
+                        echo "Found project file: ${csprojFiles}"
+                        sh "dotnet restore '${csprojFiles}'"
+                        sh "dotnet build '${csprojFiles}' --configuration Release --no-restore"
+                    } else {
+                        echo "Found ${csprojCount} project files - building all"
+                        sh 'dotnet restore'
+                        sh 'dotnet build --configuration Release --no-restore'
+                    }
+                } else {
+                    // No specific files found, let dotnet auto-detect
+                    sh 'dotnet restore'
+                    sh 'dotnet build --configuration Release --no-restore'
+                }
                 break
                 
             default:
