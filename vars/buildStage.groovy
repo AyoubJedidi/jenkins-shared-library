@@ -34,21 +34,46 @@ def call(Map config) {
                 }
                 break
                 
-            case 'python':
-                sh '''
-                    if [ -f "requirements.txt" ]; then
-                        if python3 -m venv venv 2>/dev/null; then
-                            echo "✓ Using virtual environment"
-                            . venv/bin/activate
-                            pip install -r requirements.txt
-                        else
-                            echo "⚠ venv not available, using --break-system-packages"
-                            pip3 install -r requirements.txt --break-system-packages || \
-                            pip install -r requirements.txt --break-system-packages
-                        fi
-                    fi
-                '''
-                break
+           case 'python':
+    sh '''
+        # Replace psycopg2 with psycopg2-binary in all requirement files
+        if find . -name "*.txt" | grep -q requirements; then
+            echo "📝 Checking for psycopg2 dependencies..."
+            find . -name "*.txt" -type f | while read file; do
+                if grep -q "psycopg2" "$file" 2>/dev/null; then
+                    echo "⚠️ Found psycopg2 in $file - replacing with psycopg2-binary"
+                    sed -i "s/psycopg2==/psycopg2-binary==/g; s/^psycopg2$/psycopg2-binary/g" "$file"
+                fi
+            done
+        fi
+
+        # Find requirements file (handle different locations)
+        REQ_FILE=""
+        if [ -f "requirements.txt" ]; then
+            REQ_FILE="requirements.txt"
+        elif [ -f "requirements/prod.txt" ]; then
+            REQ_FILE="requirements/prod.txt"
+        elif [ -f "requirements/base.txt" ]; then
+            REQ_FILE="requirements/base.txt"
+        fi
+
+        if [ -n "$REQ_FILE" ]; then
+            echo "📦 Installing from $REQ_FILE"
+
+            if python3 -m venv venv 2>/dev/null; then
+                echo "✓ Using virtual environment"
+                . venv/bin/activate
+                pip install -r "$REQ_FILE"
+            else
+                echo "⚠ venv not available, using --break-system-packages"
+                pip3 install -r "$REQ_FILE" --break-system-packages || \
+                pip install -r "$REQ_FILE" --break-system-packages
+            fi
+        else
+            echo "⚠️ No requirements file found"
+        fi
+    '''
+    break
                 
             case 'dotnet':
                 // Handle global.json SDK version mismatch
