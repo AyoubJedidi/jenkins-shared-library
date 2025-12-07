@@ -63,7 +63,7 @@ def call(Map config) {
                 }
             }
             
-                  stage('Quality') {
+                      stage('Quality') {
                 when {
                     expression { config.runQuality == true }
                 }
@@ -86,7 +86,7 @@ def call(Map config) {
 
             stage('Security') {
                 when {
-                    expression { config.runSecurity != false }
+                    expression { config.runSecurity == true }
                 }
                 steps {
                     script {
