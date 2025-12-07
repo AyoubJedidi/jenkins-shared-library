@@ -63,14 +63,14 @@ def call(Map config) {
                 }
             }
             
-            stage('Quality') {
+                  stage('Quality') {
                 when {
                     expression { config.runQuality == true }
                 }
                 steps {
                     script {
                         config.beforeQuality?.call()
-                        
+
                         if (config.projectDir) {
                             dir(config.projectDir) {
                                 qualityStage(config)
@@ -78,8 +78,29 @@ def call(Map config) {
                         } else {
                             qualityStage(config)
                         }
-                        
+
                         config.afterQuality?.call()
+                    }
+                }
+            }
+
+            stage('Security') {
+                when {
+                    expression { config.runSecurity != false }
+                }
+                steps {
+                    script {
+                        config.beforeSecurity?.call()
+
+                        if (config.projectDir) {
+                            dir(config.projectDir) {
+                                securityStage(config)
+                            }
+                        } else {
+                            securityStage(config)
+                        }
+
+                        config.afterSecurity?.call()
                     }
                 }
             }
