@@ -1,131 +1,58 @@
 def deploy(Map config) {
-    def awsConfig = config.aws ?: [:]
-    def region = awsConfig.region ?: 'us-east-1'
-    def cluster = awsConfig.cluster ?: 'default-cluster'
-    def service = awsConfig.service ?: config.projectName
-    def taskFamily = awsConfig.taskFamily ?: config.projectName
-    def isLocalStack = awsConfig.localstack ?: false
+    def azureConfig = config.azure ?: [:]
+    def resourceGroup = azureConfig.resourceGroup ?: 'cicd-framework-rg'
+    def containerName = azureConfig.containerName ?: config.projectName
+    def dnsLabel = azureConfig.dnsLabel ?: "${config.projectName}-demo"
+    def location = azureConfig.location ?: 'eastus'
 
-    // Set endpoint for LocalStack
-    def endpoint = isLocalStack ? 'http://localhost:4566' : ''
-    def endpointFlag = endpoint ? "--endpoint-url ${endpoint}" : ''
-
-    echo "🔵 Deploying to AWS ${isLocalStack ? '(LocalStack)' : ''}"
-    echo "Region: ${region}"
-    echo "Cluster: ${cluster}"
-    echo "Service: ${service}"
+    echo "🔵 Deploying to Azure Container Instances"
+    echo "Resource Group: ${resourceGroup}"
+    echo "Container: ${containerName}"
 
     withCredentials([
-        string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-        string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+        usernamePassword(
+            credentialsId: 'azure-acr',
+            usernameVariable: 'ACR_USER',
+            passwordVariable: 'ACR_PASS'
+        )
     ]) {
         sh """
-            export AWS_DEFAULT_REGION=${region}
-            ${isLocalStack ? 'export AWS_ACCESS_KEY_ID=test' : ''}
-            ${isLocalStack ? 'export AWS_SECRET_ACCESS_KEY=test' : ''}
+            # Delete old container
+            az container delete \
+              --resource-group ${resourceGroup} \
+              --name ${containerName} \
+              --yes || true
 
-            # Login to ECR
-            echo "Logging into ECR..."
-            aws ecr get-login-password ${endpointFlag} | \
-              docker login --username AWS --password-stdin \
-              ${isLocalStack ? 'localhost:4566' : "\$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${region}.amazonaws.com"}
+            sleep 10
 
-            # Tag image for ECR
-            REPO_URI=\$(aws ecr describe-repositories \
-              --repository-names ${config.projectName} \
-              ${endpointFlag} \
-              --query 'repositories[0].repositoryUri' \
-              --output text 2>/dev/null || echo "")
+            # Create container
+            az container create \
+              --resource-group ${resourceGroup} \
+              --name ${containerName} \
+              --image ${config.dockerRegistry}/${config.projectName}:latest \
+              --registry-login-server ${config.dockerRegistry} \
+              --registry-username \$ACR_USER \
+              --registry-password \$ACR_PASS \
+              --dns-name-label ${dnsLabel} \
+              --ports ${azureConfig.port ?: 8080} \
+              --os-type Linux \
+              --cpu ${azureConfig.cpu ?: 2} \
+              --memory ${azureConfig.memory ?: 2} \
+              --restart-policy Always \
+              --location ${location}
 
-            if [ -z "\$REPO_URI" ]; then
-                echo "Creating ECR repository..."
-                aws ecr create-repository \
-                  --repository-name ${config.projectName} \
-                  ${endpointFlag}
-
-                REPO_URI=\$(aws ecr describe-repositories \
-                  --repository-names ${config.projectName} \
-                  ${endpointFlag} \
-                  --query 'repositories[0].repositoryUri' \
-                  --output text)
-            fi
-
-            echo "Repository URI: \$REPO_URI"
-
-            # Push to ECR
-            docker tag ${config.projectName}:latest \$REPO_URI:latest
-            docker push \$REPO_URI:latest
-
-            # Register task definition
-            echo "Registering ECS task definition..."
-            cat > task-definition.json << EOF_TASK
-{
-  "family": "${taskFamily}",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "256",
-  "memory": "512",
-  "containerDefinitions": [
-    {
-      "name": "${service}",
-      "image": "\$REPO_URI:latest",
-      "portMappings": [
-        {
-          "containerPort": ${awsConfig.port ?: 8080},
-          "protocol": "tcp"
-        }
-      ],
-      "essential": true,
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/${service}",
-          "awslogs-region": "${region}",
-          "awslogs-stream-prefix": "ecs"
-        }
-      }
-    }
-  ]
-}
-EOF_TASK
-
-            TASK_DEF_ARN=\$(aws ecs register-task-definition \
-              ${endpointFlag} \
-              --cli-input-json file://task-definition.json \
-              --query 'taskDefinition.taskDefinitionArn' \
-              --output text)
-
-            echo "Task definition: \$TASK_DEF_ARN"
-
-            # Check if service exists
-            SERVICE_EXISTS=\$(aws ecs describe-services \
-              --cluster ${cluster} \
-              --services ${service} \
-              ${endpointFlag} \
-              --query 'services[0].serviceName' \
-              --output text 2>/dev/null || echo "")
-
-            if [ "\$SERVICE_EXISTS" = "${service}" ]; then
-                echo "Updating existing service..."
-                aws ecs update-service \
-                  --cluster ${cluster} \
-                  --service ${service} \
-                  --task-definition \$TASK_DEF_ARN \
-                  --force-new-deployment \
-                  ${endpointFlag}
-            else
-                echo "Creating new service..."
-                # Note: This is simplified - real ECS needs VPC/subnet config
-                echo "⚠️  Service creation requires VPC configuration"
-                echo "✅ Image pushed to ECR and task definition registered"
-            fi
+            # Get URL
+            FQDN=\$(az container show \
+              --resource-group ${resourceGroup} \
+              --name ${containerName} \
+              --query ipAddress.fqdn \
+              --output tsv)
 
             echo ""
             echo "======================================"
-            echo "✅ AWS DEPLOYMENT COMPLETE"
+            echo "✅ AZURE DEPLOYMENT COMPLETE"
             echo "======================================"
-            echo "Image: \$REPO_URI:latest"
-            echo "Task Definition: \$TASK_DEF_ARN"
+            echo "URL: http://\${FQDN}:${azureConfig.port ?: 8080}"
             echo "======================================"
         """
     }
