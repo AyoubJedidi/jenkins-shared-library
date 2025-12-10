@@ -7,6 +7,7 @@ services:
       - "4566:4566"            # LocalStack gateway
       - "4510-4559:4510-4559"  # External services
     environment:
+      - LOCALSTACK_AUTH_TOKEN=ls-SAqO0178-KeBI-QuPe-mIKo-3269NAVi0820
       - SERVICES=ecr,ecs,s3,iam,cloudformation
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
