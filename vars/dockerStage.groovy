@@ -32,7 +32,7 @@ def call(Map config) {
     
     // Optional: Push to registry
     if (config.pushToRegistry) {
-        echo "📤 Pushing to registry..."
+        echo " Pushing to registry..."
         
         if (config.dockerRegistry) {
             sh "docker tag ${fullImageName} ${config.dockerRegistry}/${fullImageName}"
