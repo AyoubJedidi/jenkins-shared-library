@@ -1,14 +1,13 @@
-def deploy(Map config) {
+def call(Map config) {
     def azureConfig = config.azure ?: [:]
     def resourceGroup = azureConfig.resourceGroup ?: 'cicd-framework-rg'
     def containerName = azureConfig.containerName ?: config.projectName
     def dnsLabel = azureConfig.dnsLabel ?: "${config.projectName}-demo"
-    def location = azureConfig.location ?: 'eastus'
-
+    
     echo "🔵 Deploying to Azure Container Instances"
     echo "Resource Group: ${resourceGroup}"
     echo "Container: ${containerName}"
-
+    
     withCredentials([
         usernamePassword(
             credentialsId: 'azure-acr',
@@ -17,15 +16,13 @@ def deploy(Map config) {
         )
     ]) {
         sh """
-            # Delete old container
             az container delete \
               --resource-group ${resourceGroup} \
               --name ${containerName} \
               --yes || true
-
+            
             sleep 10
-
-            # Create container
+            
             az container create \
               --resource-group ${resourceGroup} \
               --name ${containerName} \
@@ -38,16 +35,14 @@ def deploy(Map config) {
               --os-type Linux \
               --cpu ${azureConfig.cpu ?: 2} \
               --memory ${azureConfig.memory ?: 2} \
-              --restart-policy Always \
-              --location ${location}
-
-            # Get URL
+              --restart-policy Always
+            
             FQDN=\$(az container show \
               --resource-group ${resourceGroup} \
               --name ${containerName} \
               --query ipAddress.fqdn \
               --output tsv)
-
+            
             echo ""
             echo "======================================"
             echo "✅ AZURE DEPLOYMENT COMPLETE"
