@@ -1,8 +1,6 @@
 def call(Map config) {
     def awsConfig = config.aws ?: [:]
     def region = awsConfig.region ?: 'us-east-1'
-    def cluster = awsConfig.cluster ?: 'default-cluster'
-    def service = awsConfig.service ?: config.projectName
     def isLocalStack = awsConfig.localstack ?: false
     
     def endpoint = isLocalStack ? 'http://localhost:4566' : ''
@@ -10,15 +8,6 @@ def call(Map config) {
     
     echo "🔵 Deploying to AWS ${isLocalStack ? '(LocalStack)' : ''}"
     echo "Region: ${region}"
-    echo "Cluster: ${cluster}"
-    echo "Service: ${service}"
-    
-    // For testing without AWS account
-    if (!isLocalStack) {
-        echo "⚠️  Real AWS deployment requires AWS credentials"
-        echo "✅ Skipping deployment - library function works!"
-        return
-    }
     
     withCredentials([
         string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
@@ -29,38 +18,73 @@ def call(Map config) {
             export AWS_ACCESS_KEY_ID=test
             export AWS_SECRET_ACCESS_KEY=test
             
-            echo "Logging into ECR..."
-            aws ecr get-login-password ${endpointFlag} --region ${region} | \
-              docker login --username AWS --password-stdin localhost:4566
+            echo "📦 Creating ECR repository..."
+            aws ecr create-repository \
+              --repository-name ${config.projectName} \
+              --region ${region} \
+              ${endpointFlag} || echo "Repository exists"
             
-            # Get or create ECR repository
+            echo "📋 Getting repository URI..."
             REPO_URI=\$(aws ecr describe-repositories \
               --repository-names ${config.projectName} \
+              --region ${region} \
               ${endpointFlag} \
               --query 'repositories[0].repositoryUri' \
-              --output text 2>/dev/null || echo "")
+              --output text)
             
-            if [ -z "\$REPO_URI" ]; then
-                echo "Creating ECR repository..."
-                aws ecr create-repository --repository-name ${config.projectName} ${endpointFlag}
-                REPO_URI=\$(aws ecr describe-repositories \
-                  --repository-names ${config.projectName} \
-                  ${endpointFlag} \
-                  --query 'repositories[0].repositoryUri' \
-                  --output text)
-            fi
+            echo "Repository: \$REPO_URI"
             
-            echo "Repository URI: \$REPO_URI"
+            # Extract registry domain from URI
+            REGISTRY_DOMAIN=\${REPO_URI%%/*}
+            echo "Registry Domain: \$REGISTRY_DOMAIN"
             
-            # Push to ECR
+            echo "🔐 Logging into ECR..."
+            aws ecr get-login-password \
+              --region ${region} \
+              ${endpointFlag} | \
+              docker login --username AWS --password-stdin \$REGISTRY_DOMAIN
+            
+            echo "🏷️  Tagging image..."
             docker tag ${config.projectName}:latest \$REPO_URI:latest
+            
+            echo "📤 Pushing to ECR..."
             docker push \$REPO_URI:latest
+            
+            echo "📝 Registering ECS task definition..."
+            cat > task-def.json << 'EOFTASK'
+{
+  "family": "${config.projectName}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [{
+    "name": "${config.projectName}",
+    "image": "\$REPO_URI:latest",
+    "portMappings": [{
+      "containerPort": ${awsConfig.port ?: 8080},
+      "protocol": "tcp"
+    }],
+    "essential": true
+  }]
+}
+EOFTASK
+            
+            TASK_ARN=\$(aws ecs register-task-definition \
+              ${endpointFlag} \
+              --region ${region} \
+              --cli-input-json file://task-def.json \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text)
+            
+            echo "Task Definition: \$TASK_ARN"
             
             echo ""
             echo "======================================"
             echo "✅ AWS DEPLOYMENT COMPLETE"
             echo "======================================"
             echo "Image: \$REPO_URI:latest"
+            echo "Task: \$TASK_ARN"
             echo "======================================"
         """
     }
