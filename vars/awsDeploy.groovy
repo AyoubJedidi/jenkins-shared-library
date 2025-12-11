@@ -34,7 +34,6 @@ def call(Map config) {
             
             echo "Repository: \$REPO_URI"
             
-            # Extract registry domain from URI
             REGISTRY_DOMAIN=\${REPO_URI%%/*}
             echo "Registry Domain: \$REGISTRY_DOMAIN"
             
@@ -51,7 +50,7 @@ def call(Map config) {
             docker push \$REPO_URI:latest
             
             echo "📝 Registering ECS task definition..."
-            cat > task-def.json << 'EOFTASK'
+            cat > task-def.json << EOFTASK
 {
   "family": "${config.projectName}",
   "networkMode": "awsvpc",
@@ -69,6 +68,9 @@ def call(Map config) {
   }]
 }
 EOFTASK
+            
+            echo "Task definition content:"
+            cat task-def.json
             
             TASK_ARN=\$(aws ecs register-task-definition \
               ${endpointFlag} \
